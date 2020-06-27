@@ -9,6 +9,7 @@ from concurrent.futures import ThreadPoolExecutor
 from importlib import import_module
 from os import environ
 import logging
+from time import sleep
 
 from .provider.base import BaseProvider
 from .provider.plan import Plan
@@ -101,7 +102,7 @@ class Manager(object):
         self.include_meta = include_meta or manager_config.get('include_meta',
                                                                False)
         self.retry_count = retry_count or manager_config.get('retry_count',
-                                                               0)
+                                                             0)
         self.retry_period = retry_period or manager_config.get('retry_period',
                                                                60)
         self.log.info('__init__:   include_meta=%s, retry_count=%s, '
@@ -257,9 +258,9 @@ class Manager(object):
                     if tries <= 1:
                         raise
                     tries -= 1
-                    self.log.warn('sync: exception while planning encountered, '
-                                  'pausing for %ds and trying again, '
-                                  '%d remaining, zone=%s, exception=%s',
+                    self.log.warn('sync: exception while planning '
+                                  'encountered, pausing for %ds and trying '
+                                  'again, %d remaining, zone=%s, exception=%s',
                                   self.retry_period, tries, zone_name, e)
                     sleep(self.retry_period)
                 else:
@@ -376,9 +377,9 @@ class Manager(object):
                     if tries <= 1:
                         raise
                     tries -= 1
-                    self.log.warn('sync: exception while applying encountered, '
-                                  'pausing for %ds and trying again, '
-                                  '%d remaining, zone=%s, exception=%s',
+                    self.log.warn('sync: exception while applying '
+                                  'encountered, pausing for %ds and trying '
+                                  'again, %d remaining, zone=%s, exception=%s',
                                   self.retry_period, tries, zone_name, e)
                     sleep(self.retry_period)
                 else:
