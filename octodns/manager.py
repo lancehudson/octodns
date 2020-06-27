@@ -81,7 +81,8 @@ class Manager(object):
         plan = p[1]
         return len(plan.changes[0].record.zone.name) if plan.changes else 0
 
-    def __init__(self, config_file, max_workers=None, include_meta=False):
+    def __init__(self, config_file, max_workers=None, include_meta=False,
+                 retry_count=None, retry_period=None):
         self.log.info('__init__: config_file=%s', config_file)
 
         # Read our config file
@@ -99,7 +100,13 @@ class Manager(object):
 
         self.include_meta = include_meta or manager_config.get('include_meta',
                                                                False)
-        self.log.info('__init__:   include_meta=%s', self.include_meta)
+        self.retry_count = retry_count or manager_config.get('retry_count',
+                                                               0)
+        self.retry_period = retry_period or manager_config.get('retry_period',
+                                                               60)
+        self.log.info('__init__:   include_meta=%s, retry_count=%s, '
+                      'retry_period=%s', self.include_meta, self.retry_count,
+                      self.retry_period)
 
         self.log.debug('__init__:   configuring providers')
         self.providers = {}
@@ -241,7 +248,23 @@ class Manager(object):
                     'value': 'provider={}'.format(target.id)
                 })
                 zone.add_record(meta, replace=True)
-            plan = target.plan(zone)
+
+            tries = self.retry_count
+            while True:
+                try:
+                    plan = target.plan(zone)
+                except Exception as e:
+                    if tries <= 1:
+                        raise
+                    tries -= 1
+                    self.log.warn('sync: exception while planning encountered, '
+                                  'pausing for %ds and trying again, '
+                                  '%d remaining, zone=%s, exception=%s',
+                                  self.retry_period, tries, zone_name, e)
+                    sleep(self.retry_period)
+                else:
+                    break
+
             if plan:
                 plans.append((target, plan))
 
@@ -344,7 +367,22 @@ class Manager(object):
                 self.log.info('sync: zone=%s skipping always-dry-run',
                               zone_name)
                 continue
-            total_changes += target.apply(plan)
+
+            tries = self.retry_count
+            while True:
+                try:
+                    total_changes += target.apply(plan)
+                except Exception as e:
+                    if tries <= 1:
+                        raise
+                    tries -= 1
+                    self.log.warn('sync: exception while applying encountered, '
+                                  'pausing for %ds and trying again, '
+                                  '%d remaining, zone=%s, exception=%s',
+                                  self.retry_period, tries, zone_name, e)
+                    sleep(self.retry_period)
+                else:
+                    break
 
         self.log.info('sync:   %d total changes', total_changes)
         return total_changes
